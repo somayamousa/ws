@@ -1,5 +1,6 @@
 package com.example.ws;
 
+import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
@@ -26,9 +27,10 @@ public class login extends AppCompatActivity {
     private EditText editTextUsername, editTextPassword;
     private TextView textViewlog;
 
-    private static final String LOGIN_URL = "http://10.0.2.2/WorkSync/loginapi.php";
+    private static final String LOGIN_URL = "http://10.0.2.2/worksync/loginapi.php";
 
 
+    @SuppressLint("MissingInflatedId")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);

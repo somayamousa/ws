@@ -1,7 +1,7 @@
 package com.example.ws;
 
-
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.Settings;
@@ -23,6 +23,9 @@ import com.android.volley.Request;
 import com.android.volley.RequestQueue;
 import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
+import com.example.ws.EncryptionUtils;
+import com.example.ws.R;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 import java.text.SimpleDateFormat;
@@ -47,20 +50,29 @@ public class attendance extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_attendance);
 
-        startButton = findViewById(R.id.btn_check_in);
-        stopButton = findViewById(R.id.btn_check_out);
-        timerText = findViewById(R.id.tv_timer);
+        startButton = findViewById(R.id.startButton);
+        stopButton = findViewById(R.id.stopButton);
+        timerText = findViewById(R.id.timerText);
 
         requestQueue = Volley.newRequestQueue(this);
 
         startButton.setOnClickListener(v -> startButtonEvent());
-        stopButton.setOnClickListener(v -> stopTimer());
+        stopButton.setOnClickListener(v -> stopButtonEvent());
+
+        // استئناف التايمر عند العودة للنشاط
+        SharedPreferences prefs = getSharedPreferences("prefs", MODE_PRIVATE);
+        startTime = prefs.getLong("startTime", 0);
+        isCounting = prefs.getBoolean("isCounting", false);
+
+        if (isCounting) {
+            handler.postDelayed(updateTimerRunnable, 1000);
+        }
     }
 
     private void startButtonEvent() {
         if (checkBiometricSupport()) {
-            setupBiometricPrompt();
-            authenticateUser();
+            setupBiometricPromptForStart();
+            authenticateUserForStart();
         } else {
             Toast.makeText(this, "Biometric authentication not supported", Toast.LENGTH_SHORT).show();
         }
@@ -71,6 +83,15 @@ public class attendance extends AppCompatActivity {
             startTime = System.currentTimeMillis();
             isCounting = true;
             handler.postDelayed(updateTimerRunnable, 1000);
+        }
+    }
+
+    private void stopButtonEvent() {
+        if (checkBiometricSupport()) {
+            setupBiometricPromptForStop();
+            authenticateUserForStop();
+        } else {
+            Toast.makeText(this, "Biometric authentication not supported", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -115,7 +136,7 @@ public class attendance extends AppCompatActivity {
         startActivity(enrollIntent);
     }
 
-    private void setupBiometricPrompt() {
+    private void setupBiometricPromptForStart() {
         Executor executor = ContextCompat.getMainExecutor(this);
         biometricPrompt = new BiometricPrompt(this, executor, new BiometricPrompt.AuthenticationCallback() {
             @Override
@@ -124,7 +145,7 @@ public class attendance extends AppCompatActivity {
                 Toast.makeText(attendance.this, "Authentication successful!", Toast.LENGTH_SHORT).show();
                 String userId = "user123"; // Replace with actual user ID from your app
                 String capturedBiometricTemplate = "capturedBiometricData"; // Replace with actual biometric data captured
-                // sendBiometricDataToServer(userId, capturedBiometricTemplate);
+                sendBiometricDataToServer(userId, capturedBiometricTemplate);
                 startTimer(); // Start the timer after successful authentication
             }
 
@@ -137,7 +158,7 @@ public class attendance extends AppCompatActivity {
             @Override
             public void onAuthenticationError(int errorCode, @NonNull CharSequence errString) {
                 super.onAuthenticationError(errorCode, errString);
-                Toast.makeText(attendance.this, "Error : " + errString, Toast.LENGTH_SHORT).show();
+                Toast.makeText(attendance.this, "Error: " + errString, Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -148,7 +169,41 @@ public class attendance extends AppCompatActivity {
                 .build();
     }
 
-    private void authenticateUser() {
+    private void authenticateUserForStart() {
+        biometricPrompt.authenticate(promptInfo);
+    }
+
+    private void setupBiometricPromptForStop() {
+        Executor executor = ContextCompat.getMainExecutor(this);
+        biometricPrompt = new BiometricPrompt(this, executor, new BiometricPrompt.AuthenticationCallback() {
+            @Override
+            public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
+                super.onAuthenticationSucceeded(result);
+                Toast.makeText(attendance.this, "Authentication successful!", Toast.LENGTH_SHORT).show();
+                stopTimer(); // Stop the timer after successful authentication
+            }
+
+            @Override
+            public void onAuthenticationFailed() {
+                super.onAuthenticationFailed();
+                Toast.makeText(attendance.this, "Authentication failed", Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onAuthenticationError(int errorCode, @NonNull CharSequence errString) {
+                super.onAuthenticationError(errorCode, errString);
+                Toast.makeText(attendance.this, "Error: " + errString, Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        promptInfo = new BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Biometric Authentication")
+                .setSubtitle("Use your fingerprint or face to stop the timer")
+                .setNegativeButtonText("Cancel")
+                .build();
+    }
+
+    private void authenticateUserForStop() {
         biometricPrompt.authenticate(promptInfo);
     }
 
@@ -240,4 +295,16 @@ public class attendance extends AppCompatActivity {
             }
         }
     };
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // لا حاجة لإيقاف التايمر هنا، إذا كان التايمر نشطًا سيتم استئنافه تلقائيًا
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        handler.removeCallbacks(updateTimerRunnable);
+    }
 }
